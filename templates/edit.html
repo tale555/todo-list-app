@@ -1,0 +1,261 @@
+{% extends "base.html" %} {% block title %}{% if todo %}Todo編集{% else
+%}Todo新規作成{% endif %} - Todo List App{% endblock %} {% block content %}
+<div class="todo-form-container">
+  <div class="form-header">
+    <h2>{% if todo %}Todo編集{% else %}Todo新規作成{% endif %}</h2>
+    <a href="{{ url_for('index') }}" class="btn btn-secondary">一覧に戻る</a>
+  </div>
+
+  <form method="POST" class="todo-form">
+    {% if errors %}
+    <div class="form-errors">
+      {% for error in errors %}
+      <div class="error-message">{{ error }}</div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="form-group">
+      <label for="title" class="form-label">
+        タイトル <span class="required">*</span>
+      </label>
+      <input
+        type="text"
+        id="title"
+        name="title"
+        class="form-input"
+        value="{{ todo.title if todo else '' }}"
+        required
+        placeholder="Todoのタイトルを入力"
+      />
+    </div>
+
+    <div class="form-group">
+      <label for="content" class="form-label">
+        内容 <span class="optional">（任意）</span>
+      </label>
+      <textarea
+        id="content"
+        name="content"
+        class="form-textarea"
+        rows="5"
+        placeholder="Todoの詳細内容を入力（任意）"
+      >
+{{ todo.content if todo else '' }}</textarea
+      >
+    </div>
+
+    <div class="form-group">
+      <label for="due_date" class="form-label">
+        期日 <span class="required">*</span>
+      </label>
+      <input
+        type="date"
+        id="due_date"
+        name="due_date"
+        class="form-input"
+        value="{{ todo.due_date if todo else '' }}"
+        required
+      />
+      <small class="form-hint"
+        >YYYY-MM-DD形式で入力してください（例: 2024-12-31）</small
+      >
+    </div>
+
+    <div class="form-group">
+      <label for="category" class="form-label">
+        カテゴリ <span class="optional">（任意）</span>
+      </label>
+      <input
+        type="text"
+        id="category"
+        name="category"
+        class="form-input"
+        value="{{ todo.category if todo else '' }}"
+        placeholder="例: 仕事、プライベート、買い物"
+        list="category-suggestions"
+      />
+      <datalist id="category-suggestions">
+        {% for cat in categories %}
+        <option value="{{ cat }}">{% endfor %}</option>
+      </datalist>
+
+      <small class="form-hint"
+        >カテゴリを入力すると、色分け表示やフィルターが可能になります</small
+      >
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">
+        <input
+          type="checkbox"
+          id="enable_line_notification"
+          name="enable_line_notification"
+          {%
+          if
+          not
+          todo
+          or
+          (todo
+          and
+          todo.enable_line_notification)
+          %}checked{%
+          endif
+          %}
+          class="form-checkbox"
+        />
+        <span style="margin-left: 8px">LINE通知を有効にする</span>
+      </label>
+      <small class="form-hint"
+        >チェックを入れると、期日3日前・前日・当日にLINE通知が送信されます</small
+      >
+    </div>
+
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary">
+        {% if todo %}更新{% else %}作成{% endif %}
+      </button>
+      <button type="button" id="save-draft" class="btn btn-draft">
+        一時保存
+      </button>
+      <a href="{{ url_for('index') }}" class="btn btn-secondary">キャンセル</a>
+    </div>
+  </form>
+</div>
+{% endblock %} {% block extra_js %}
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+      const form = document.querySelector('.todo-form');
+      const titleInput = document.getElementById('title');
+      const contentInput = document.getElementById('content');
+      const dueDateInput = document.getElementById('due_date');
+      const saveDraftBtn = document.getElementById('save-draft');
+      const isEditMode = {% if todo %}true{% else %}false{% endif %};
+
+      // 一時保存のキー（編集モードの場合はtodo_idを含める）
+      const draftKey = isEditMode ? 'todo_draft_edit' : 'todo_drafts';
+      const DRAFTS_STORAGE_KEY = 'todo_drafts';
+
+      // 一時保存されたデータを読み込む
+      function loadDraft(draftId) {
+          try {
+              const draftsJson = localStorage.getItem(DRAFTS_STORAGE_KEY);
+              if (!draftsJson) return;
+
+              const drafts = JSON.parse(draftsJson);
+              const draft = drafts.find(d => d.id === draftId);
+
+              if (draft) {
+                  if (draft.title) titleInput.value = draft.title;
+                  if (draft.content) contentInput.value = draft.content;
+                  if (draft.due_date) dueDateInput.value = draft.due_date;
+
+                  // 一時保存データがあることを通知
+                  showDraftNotification('一時保存されたデータを読み込みました');
+              }
+          } catch (e) {
+              console.error('一時保存データの読み込みエラー:', e);
+          }
+      }
+
+      // 一時保存
+      function saveDraft() {
+          try {
+              // タイトルまたは期日が入力されている場合のみ保存
+              if (!titleInput.value.trim() && !dueDateInput.value) {
+                  alert('タイトルまたは期日を入力してください');
+                  return;
+              }
+
+              // 既存の一時保存データを取得
+              const draftsJson = localStorage.getItem(DRAFTS_STORAGE_KEY);
+              let drafts = draftsJson ? JSON.parse(draftsJson) : [];
+
+              // 新しい一時保存データを作成
+              const newDraft = {
+                  id: Date.now().toString(), // 一意のID
+                  title: titleInput.value,
+                  content: contentInput.value,
+                  due_date: dueDateInput.value,
+                  saved_at: new Date().toISOString()
+              };
+
+              // 配列の先頭に追加（最新が最初に来る）
+              drafts.unshift(newDraft);
+
+              // 最大10件まで保持
+              if (drafts.length > 10) {
+                  drafts = drafts.slice(0, 10);
+              }
+
+              localStorage.setItem(DRAFTS_STORAGE_KEY, JSON.stringify(drafts));
+
+              // 一覧画面に遷移
+              window.location.href = "{{ url_for('index') }}";
+          } catch (e) {
+              console.error('一時保存エラー:', e);
+              alert('一時保存に失敗しました');
+          }
+      }
+
+      // 一時保存通知を表示
+      function showDraftNotification(message) {
+          // 既存の通知を削除
+          const existing = document.querySelector('.draft-notification');
+          if (existing) existing.remove();
+
+          // 新しい通知を作成
+          const notification = document.createElement('div');
+          notification.className = 'draft-notification';
+          notification.textContent = message;
+          form.insertBefore(notification, form.firstChild);
+
+          // 3秒後に自動削除
+          setTimeout(() => {
+              notification.remove();
+          }, 3000);
+      }
+
+      // 一時保存ボタンのイベント
+      if (saveDraftBtn) {
+          saveDraftBtn.addEventListener('click', function(e) {
+              e.preventDefault();
+              saveDraft();
+          });
+      }
+
+      // フォーム送信時に一時保存をクリア
+      form.addEventListener('submit', function() {
+          if (isEditMode) {
+              localStorage.removeItem(draftKey);
+          } else {
+              // 新規作成時は、読み込んだ一時保存データを削除
+              const urlParams = new URLSearchParams(window.location.search);
+              const draftId = urlParams.get('draft_id');
+              if (draftId) {
+                  try {
+                      const DRAFTS_STORAGE_KEY = 'todo_drafts';
+                      const draftsJson = localStorage.getItem(DRAFTS_STORAGE_KEY);
+                      if (draftsJson) {
+                          const drafts = JSON.parse(draftsJson);
+                          const filteredDrafts = drafts.filter(d => d.id !== draftId);
+                          localStorage.setItem(DRAFTS_STORAGE_KEY, JSON.stringify(filteredDrafts));
+                      }
+                  } catch (e) {
+                      console.error('一時保存データの削除エラー:', e);
+                  }
+              }
+          }
+      });
+
+      // ページ読み込み時に一時保存データを読み込む（URLパラメータがある場合のみ）
+      if (!isEditMode) {
+          const urlParams = new URLSearchParams(window.location.search);
+          const draftId = urlParams.get('draft_id');
+          if (draftId) {
+              loadDraft(draftId);
+          }
+      }
+  });
+</script>
+{% endblock %}

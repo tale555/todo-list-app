@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+
+# 環境変数
+.env
+
+# 認証ファイル（機密情報）
+configs/credentials.json
+configs/*.json
+!configs/__init__.py
+
+# ログファイル
+logs/
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Flask
+instance/
+.webassets-cache
+
+# その他
+*.bak
+*.tmp
+

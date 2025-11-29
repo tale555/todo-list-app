@@ -1,0 +1,88 @@
+"""
+ngrok経由でWebhookエンドポイントをテストするスクリプト
+"""
+
+import requests
+
+def test_webhook_via_ngrok():
+    """ngrok経由でWebhookをテスト"""
+    
+    print("=" * 60)
+    print("ngrok経由でWebhookエンドポイントをテスト")
+    print("=" * 60)
+    print()
+    
+    # ngrokのURL（実際のURLに置き換えてください）
+    ngrok_url = input("ngrokのURLを入力してください（例: https://xxxx-xxxx.ngrok-free.app）: ").strip()
+    
+    if not ngrok_url:
+        print("❌ URLが入力されていません")
+        return
+    
+    # 末尾のスラッシュを削除
+    ngrok_url = ngrok_url.rstrip('/')
+    webhook_url = f"{ngrok_url}/line/webhook"
+    
+    print()
+    print(f"📤 テストURL: {webhook_url}")
+    print()
+    
+    # GETリクエスト（LINEの検証用）
+    print("1. GETリクエスト（検証用）を送信...")
+    try:
+        response = requests.get(webhook_url, timeout=10)
+        print(f"   ステータスコード: {response.status_code}")
+        print(f"   レスポンス: {response.text[:100]}")
+        
+        if response.status_code == 200:
+            print("   ✅ GETリクエストは成功しました")
+        else:
+            print(f"   ❌ GETリクエストが失敗しました（期待: 200, 実際: {response.status_code}）")
+    except requests.exceptions.RequestException as e:
+        print(f"   ❌ エラー: {e}")
+    
+    print()
+    
+    # POSTリクエスト（LINEのイベント用）
+    print("2. POSTリクエスト（イベント用）を送信...")
+    test_event = {
+        "events": [
+            {
+                "type": "message",
+                "source": {
+                    "userId": "test_user_id"
+                },
+                "message": {
+                    "type": "text",
+                    "text": "テストメッセージ"
+                }
+            }
+        ]
+    }
+    
+    try:
+        response = requests.post(
+            webhook_url,
+            json=test_event,
+            headers={"Content-Type": "application/json"},
+            timeout=10
+        )
+        print(f"   ステータスコード: {response.status_code}")
+        print(f"   レスポンス: {response.text[:100]}")
+        
+        if response.status_code == 200:
+            print("   ✅ POSTリクエストは成功しました")
+        else:
+            print(f"   ❌ POSTリクエストが失敗しました（期待: 200, 実際: {response.status_code}）")
+    except requests.exceptions.RequestException as e:
+        print(f"   ❌ エラー: {e}")
+    
+    print()
+    print("=" * 60)
+    print("テスト完了")
+    print("=" * 60)
+
+
+if __name__ == "__main__":
+    test_webhook_via_ngrok()
+

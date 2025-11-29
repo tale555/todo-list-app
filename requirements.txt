@@ -1,0 +1,23 @@
+# Todo List App - 依存パッケージ
+
+# Webフレームワーク
+flask>=3.0.0
+
+# Google Sheets API
+google-api-python-client>=2.108.0
+google-auth>=2.23.4
+google-auth-oauthlib>=1.1.0
+google-auth-httplib2>=0.1.1
+
+# 環境変数管理
+python-dotenv>=1.0.0
+
+# 日時処理
+python-dateutil>=2.8.2
+
+# HTTPリクエスト（LINE Notify用）
+requests>=2.31.0
+
+# 本番環境用WSGIサーバー（デプロイ時）
+gunicorn>=21.2.0
+

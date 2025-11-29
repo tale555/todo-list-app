@@ -1,0 +1,313 @@
+{% extends "base.html" %} {% block title %}Todo一覧 - Todo List App{% endblock
+%} {% block content %}
+<div class="simple-list-container">
+  <div class="todo-header">
+    <h2>Todo一覧</h2>
+    <div class="todo-header-actions">
+      <a href="{{ url_for('index') }}" class="btn btn-secondary">詳細表示</a>
+      <a href="{{ url_for('drafts') }}" class="btn btn-draft">一時保存</a>
+      <a href="{{ url_for('create_todo') }}" class="btn btn-primary"
+        >新規作成</a
+      >
+    </div>
+  </div>
+
+  {% if todos %}
+  <div class="simple-todo-list" id="simple-todo-list">
+    {% for todo in todos %}
+    <div
+      class="simple-todo-item {% if todo.is_completed %}completed{% endif %} {% if todo.is_overdue %}overdue{% elif todo.is_due_today %}due-today{% elif todo.is_due_tomorrow %}due-tomorrow{% elif todo.is_due_soon %}due-soon{% endif %}"
+      draggable="true"
+      data-todo-id="{{ todo.id }}"
+      {%
+      if
+      todo.is_completed
+      %}style="display: none;"
+      {%
+      endif
+      %}
+    >
+      <div class="simple-todo-content">
+        <div class="simple-todo-title-row">
+          <div
+            class="simple-todo-title {% if todo.is_completed %}completed-text{% endif %}"
+          >
+            {{ todo.title }}
+          </div>
+          {% if todo.category %}
+          <span
+            class="category-badge category-{{ todo.category|lower|replace(' ', '-')|replace('　', '-') }}"
+            >{{ todo.category }}</span
+          >
+          {% endif %}
+        </div>
+        <div class="simple-todo-date">
+          <span class="date-value">{{ todo.formatted_due_date }}</span>
+          {% if todo.is_overdue %}
+          <span class="badge badge-danger">期限切れ</span>
+          {% elif todo.is_due_today %}
+          <span class="badge badge-today"><strong>本日期限</strong></span>
+          {% elif todo.is_due_tomorrow %}
+          <span class="badge badge-tomorrow"><strong>明日まで</strong></span>
+          {% elif todo.is_due_soon %}
+          <span class="badge badge-warning">期限間近</span>
+          {% endif %}
+        </div>
+      </div>
+      <div class="simple-todo-actions">
+        <a
+          href="{{ url_for('edit_todo', todo_id=todo.id) }}"
+          class="btn btn-edit btn-sm"
+          onclick="event.stopPropagation();"
+          >編集</a
+        >
+        <form
+          method="POST"
+          action="{{ url_for('delete_todo', todo_id=todo.id) }}"
+          onsubmit="return confirm('このTodoを削除してもよろしいですか？');"
+          style="display: inline-block"
+          class="delete-form"
+          onclick="event.stopPropagation();"
+        >
+          <button
+            type="submit"
+            class="btn btn-delete btn-sm"
+            name="delete"
+            value="{{ todo.id }}"
+          >
+            削除
+          </button>
+        </form>
+        <button
+          type="button"
+          class="btn btn-sm {% if todo.is_completed %}btn-completed{% else %}btn-complete{% endif %}"
+          onclick="event.stopPropagation(); toggleCompletion('{{ todo.id }}', this)"
+        >
+          {% if todo.is_completed %}未完了{% else %}完了{% endif %}
+        </button>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty-state">
+    <p class="empty-message">📝 Todoがまだ登録されていません</p>
+    <a href="{{ url_for('create_todo') }}" class="btn btn-primary"
+      >最初のTodoを作成</a
+    >
+  </div>
+  {% endif %}
+</div>
+{% endblock %} {% block extra_js %}
+<script>
+  function toggleCompletion(todoId, button) {
+    const todoItem = button.closest(".simple-todo-item");
+
+    fetch(`/toggle-completion/${todoId}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        if (data.success) {
+          if (data.is_completed) {
+            todoItem.classList.add("completed");
+            todoItem.querySelectorAll(".simple-todo-title").forEach((el) => {
+              el.classList.add("completed-text");
+            });
+            // ボタンのテキストとスタイルを更新
+            button.textContent = "未完了";
+            button.classList.remove("btn-complete");
+            button.classList.add("btn-completed");
+
+            // 完了済みは即座に非表示にする
+            todoItem.style.display = "none";
+          } else {
+            todoItem.classList.remove("completed");
+            todoItem.querySelectorAll(".simple-todo-title").forEach((el) => {
+              el.classList.remove("completed-text");
+            });
+            // ボタンのテキストとスタイルを更新
+            button.textContent = "完了";
+            button.classList.remove("btn-completed");
+            button.classList.add("btn-complete");
+
+            // 未完了に戻した場合は即座に表示する
+            todoItem.style.display = "";
+          }
+        } else {
+          alert(
+            "完了状態の更新に失敗しました: " + (data.error || "不明なエラー")
+          );
+        }
+      })
+      .catch((error) => {
+        console.error("エラー:", error);
+        alert("完了状態の更新に失敗しました");
+      });
+  }
+
+  document.addEventListener("DOMContentLoaded", function () {
+    const todoList = document.getElementById("simple-todo-list");
+    if (!todoList) return;
+
+    let draggedElement = null;
+    let isDragging = false;
+
+    // ドラッグ開始
+    todoList.addEventListener("dragstart", function (e) {
+      // ボタンやフォームをクリックした場合はドラッグを無効化
+      if (
+        e.target.closest(".simple-todo-actions") ||
+        e.target.closest(".btn") ||
+        e.target.closest("form")
+      ) {
+        e.preventDefault();
+        return;
+      }
+
+      if (e.target.classList.contains("simple-todo-item")) {
+        draggedElement = e.target;
+        isDragging = true;
+        e.target.style.opacity = "0.5";
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/html", e.target.outerHTML);
+      }
+    });
+
+    // ドラッグ中
+    todoList.addEventListener("dragover", function (e) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+
+      if (!draggedElement) return;
+
+      const afterElement = getDragAfterElement(todoList, e.clientY);
+
+      // ドラッグオーバーのスタイルをリセット
+      const allItems = todoList.querySelectorAll(".simple-todo-item");
+      allItems.forEach((item) => item.classList.remove("drag-over"));
+
+      if (afterElement == null) {
+        todoList.appendChild(draggedElement);
+      } else {
+        todoList.insertBefore(draggedElement, afterElement);
+        afterElement.classList.add("drag-over");
+      }
+    });
+
+    // ドラッグリーブ
+    todoList.addEventListener("dragleave", function (e) {
+      const allItems = todoList.querySelectorAll(".simple-todo-item");
+      allItems.forEach((item) => item.classList.remove("drag-over"));
+    });
+
+    // ドロップ
+    todoList.addEventListener("drop", function (e) {
+      e.preventDefault();
+      if (draggedElement && draggedElement.parentNode) {
+        draggedElement.style.opacity = "1";
+      }
+    });
+
+    // ドラッグ終了
+    todoList.addEventListener("dragend", function (e) {
+      if (e.target.classList.contains("simple-todo-item")) {
+        e.target.style.opacity = "1";
+        isDragging = false;
+
+        // 順序を更新
+        const todos = Array.from(todoList.children);
+        const orders = todos.map((item, index) => ({
+          id: item.getAttribute("data-todo-id"),
+          order: index + 1,
+        }));
+
+        // サーバーに順序を送信
+        fetch("/update-order", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ orders: orders }),
+        })
+          .then((response) => response.json())
+          .then((data) => {
+            if (data.success) {
+              console.log("順序を更新しました");
+            } else {
+              console.error("順序の更新に失敗:", data.error);
+              // エラー時はページをリロード
+              location.reload();
+            }
+          })
+          .catch((error) => {
+            console.error("エラー:", error);
+            location.reload();
+          });
+      }
+    });
+
+    // ドラッグ中の要素の後に配置する要素を取得
+    function getDragAfterElement(container, y) {
+      const draggableElements = [
+        ...container.querySelectorAll(".simple-todo-item:not(.dragging)"),
+      ];
+
+      return draggableElements.reduce(
+        (closest, child) => {
+          const box = child.getBoundingClientRect();
+          const offset = y - box.top - box.height / 2;
+
+          if (offset < 0 && offset > closest.offset) {
+            return { offset: offset, element: child };
+          } else {
+            return closest;
+          }
+        },
+        { offset: Number.NEGATIVE_INFINITY }
+      ).element;
+    }
+
+    // ドラッグ中のクラスを追加/削除
+    todoList.addEventListener("drag", function (e) {
+      if (e.target.classList.contains("simple-todo-item")) {
+        e.target.classList.add("dragging");
+      }
+    });
+
+    todoList.addEventListener("dragend", function (e) {
+      if (e.target.classList.contains("simple-todo-item")) {
+        e.target.classList.remove("dragging");
+        const allItems = todoList.querySelectorAll(".simple-todo-item");
+        allItems.forEach((item) => item.classList.remove("drag-over"));
+      }
+    });
+
+    // クリックで詳細表示に戻る（ドラッグ中、ボタンクリック時は無効）
+    todoList.addEventListener("click", function (e) {
+      if (isDragging) {
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
+
+      // ボタンやフォームをクリックした場合は詳細表示に戻らない
+      if (
+        e.target.closest(".simple-todo-actions") ||
+        e.target.closest(".btn") ||
+        e.target.closest("form")
+      ) {
+        return;
+      }
+
+      const item = e.target.closest(".simple-todo-item");
+      if (item && !item.classList.contains("dragging")) {
+        window.location.href = "{{ url_for('index') }}";
+      }
+    });
+  });
+</script>
+{% endblock %}

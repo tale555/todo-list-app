@@ -1,0 +1,127 @@
+{% extends "base.html" %} {% block title %}一時保存データ - Todo List App{%
+endblock %} {% block content %}
+<div class="drafts-container">
+  <div class="todo-header">
+    <h2>一時保存データ</h2>
+    <div class="todo-header-actions">
+      <a href="{{ url_for('simple_list') }}" class="btn btn-secondary">一覧</a>
+      <a href="{{ url_for('index') }}" class="btn btn-secondary">詳細表示</a>
+      <a href="{{ url_for('create_todo') }}" class="btn btn-primary"
+        >新規作成</a
+      >
+    </div>
+  </div>
+
+  <div id="drafts-section">
+    <div id="drafts-list" class="drafts-list"></div>
+    <div id="drafts-empty" class="empty-state" style="display: none">
+      <p class="empty-message">📝 一時保存されたデータがありません</p>
+    </div>
+  </div>
+</div>
+{% endblock %} {% block extra_js %}
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    const DRAFTS_STORAGE_KEY = "todo_drafts";
+    const draftsList = document.getElementById("drafts-list");
+    const draftsEmpty = document.getElementById("drafts-empty");
+
+    // 一時保存データを取得
+    function getDrafts() {
+      try {
+        const draftsJson = localStorage.getItem(DRAFTS_STORAGE_KEY);
+        return draftsJson ? JSON.parse(draftsJson) : [];
+      } catch (e) {
+        console.error("一時保存データの取得エラー:", e);
+        return [];
+      }
+    }
+
+    // 一時保存データを表示
+    function displayDrafts() {
+      const drafts = getDrafts();
+
+      if (drafts.length === 0) {
+        draftsList.style.display = "none";
+        draftsEmpty.style.display = "block";
+        return;
+      }
+
+      draftsList.style.display = "block";
+      draftsEmpty.style.display = "none";
+      draftsList.innerHTML = "";
+
+      drafts.forEach((draft) => {
+        const draftItem = document.createElement("div");
+        draftItem.className = "draft-item";
+
+        const savedDate = new Date(draft.saved_at);
+        const formattedDate = savedDate.toLocaleString("ja-JP", {
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+
+        draftItem.innerHTML = `
+          <div class="draft-content">
+            <div class="draft-title">${draft.title || "(タイトルなし)"}</div>
+            <div class="draft-meta">
+              <span>期日: ${draft.due_date || "(未設定)"}</span>
+              <span>保存日時: ${formattedDate}</span>
+            </div>
+            ${
+              draft.content
+                ? `<div class="draft-description">${draft.content}</div>`
+                : ""
+            }
+          </div>
+          <div class="draft-actions">
+            <button class="btn btn-primary btn-sm" onclick="loadDraft('${
+              draft.id
+            }')">
+              読み込む
+            </button>
+            <button class="btn btn-delete btn-sm" onclick="deleteDraft('${
+              draft.id
+            }')">
+              削除
+            </button>
+          </div>
+        `;
+
+        draftsList.appendChild(draftItem);
+      });
+    }
+
+    // 一時保存データを読み込む
+    window.loadDraft = function (draftId) {
+      window.location.href = "{{ url_for('create_todo') }}?draft_id=" + draftId;
+    };
+
+    // 一時保存データを削除
+    window.deleteDraft = function (draftId) {
+      if (!confirm("この一時保存データを削除してもよろしいですか？")) {
+        return;
+      }
+
+      try {
+        const drafts = getDrafts();
+        const filteredDrafts = drafts.filter((d) => d.id !== draftId);
+        localStorage.setItem(
+          DRAFTS_STORAGE_KEY,
+          JSON.stringify(filteredDrafts)
+        );
+        displayDrafts();
+      } catch (e) {
+        console.error("一時保存データの削除エラー:", e);
+        alert("削除に失敗しました");
+      }
+    };
+
+    // 初期表示
+    displayDrafts();
+  });
+</script>
+{% endblock %}

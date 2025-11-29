@@ -1,0 +1,198 @@
+{% extends "base.html" %} {% block title %}Todo詳細 - Todo List App{% endblock
+%} {% block content %}
+<div class="todo-list-container">
+  <div class="todo-header">
+    <h2>Todo詳細</h2>
+    <div class="todo-header-actions">
+      <a href="{{ url_for('simple_list') }}" class="btn btn-secondary">一覧</a>
+      <a href="{{ url_for('drafts') }}" class="btn btn-draft">一時保存</a>
+      <a href="{{ url_for('create_todo') }}" class="btn btn-primary"
+        >新規作成</a
+      >
+    </div>
+  </div>
+
+  {% if todos %}
+  <div class="todo-list" id="todo-list">
+    {% for todo in todos %}
+    <div
+      class="todo-item {% if todo.is_overdue %}overdue{% elif todo.is_due_today %}due-today{% elif todo.is_due_tomorrow %}due-tomorrow{% elif todo.is_due_soon %}due-soon{% endif %}"
+      draggable="true"
+      data-todo-id="{{ todo.id }}"
+    >
+      <div class="todo-content">
+        <h3 class="todo-title">{{ todo.title }}</h3>
+        <p class="todo-description">{{ todo.content }}</p>
+        <div class="todo-meta">
+          <span class="todo-date">
+            <strong>期日:</strong>
+            <span class="date-value">{{ todo.formatted_due_date }}</span>
+            {% if todo.is_overdue %}
+            <span class="badge badge-danger">期限切れ</span>
+            {% elif todo.is_due_today %}
+            <span class="badge badge-today"><strong>本日期限</strong></span>
+            {% elif todo.is_due_tomorrow %}
+            <span class="badge badge-tomorrow"><strong>明日まで</strong></span>
+            {% elif todo.is_due_soon %}
+            <span class="badge badge-warning">期限間近</span>
+            {% endif %}
+          </span>
+          <span class="todo-created">
+            作成日: {{ todo.formatted_created_at }}
+          </span>
+        </div>
+      </div>
+      <div class="todo-actions">
+        <a
+          href="{{ url_for('edit_todo', todo_id=todo.id) }}"
+          class="btn btn-edit"
+          >編集</a
+        >
+        <form
+          method="POST"
+          action="{{ url_for('delete_todo', todo_id=todo.id) }}"
+          onsubmit="return confirm('このTodoを削除してもよろしいですか？');"
+          style="display: inline-block"
+          class="delete-form"
+        >
+          <button
+            type="submit"
+            class="btn btn-delete"
+            name="delete"
+            value="{{ todo.id }}"
+          >
+            削除
+          </button>
+        </form>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty-state">
+    <p class="empty-message">📝 Todoがまだ登録されていません</p>
+    <a href="{{ url_for('create_todo') }}" class="btn btn-primary"
+      >最初のTodoを作成</a
+    >
+  </div>
+  {% endif %}
+</div>
+{% endblock %} {% block extra_js %}
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    const todoList = document.getElementById("todo-list");
+    if (!todoList) return;
+
+    let draggedElement = null;
+    let draggedIndex = null;
+
+    // ドラッグ開始
+    todoList.addEventListener("dragstart", function (e) {
+      if (e.target.classList.contains("todo-item")) {
+        draggedElement = e.target;
+        draggedIndex = Array.from(todoList.children).indexOf(e.target);
+        e.target.style.opacity = "0.5";
+        e.dataTransfer.effectAllowed = "move";
+      }
+    });
+
+    // ドラッグ中
+    todoList.addEventListener("dragover", function (e) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+
+      if (!draggedElement) return;
+
+      const afterElement = getDragAfterElement(todoList, e.clientY);
+
+      // ドラッグオーバーのスタイルをリセット
+      const allItems = todoList.querySelectorAll(".todo-item");
+      allItems.forEach((item) => item.classList.remove("drag-over"));
+
+      if (afterElement == null) {
+        todoList.appendChild(draggedElement);
+      } else {
+        todoList.insertBefore(draggedElement, afterElement);
+        afterElement.classList.add("drag-over");
+      }
+    });
+
+    // ドラッグリーブ
+    todoList.addEventListener("dragleave", function (e) {
+      const allItems = todoList.querySelectorAll(".todo-item");
+      allItems.forEach((item) => item.classList.remove("drag-over"));
+    });
+
+    // ドラッグ終了
+    todoList.addEventListener("dragend", function (e) {
+      if (e.target.classList.contains("todo-item")) {
+        e.target.style.opacity = "1";
+
+        // 順序を更新
+        const todos = Array.from(todoList.children);
+        const orders = todos.map((item, index) => ({
+          id: item.getAttribute("data-todo-id"),
+          order: index + 1,
+        }));
+
+        // サーバーに順序を送信
+        fetch("/update-order", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ orders: orders }),
+        })
+          .then((response) => response.json())
+          .then((data) => {
+            if (data.success) {
+              console.log("順序を更新しました");
+            } else {
+              console.error("順序の更新に失敗:", data.error);
+              // エラー時はページをリロード
+              location.reload();
+            }
+          })
+          .catch((error) => {
+            console.error("エラー:", error);
+            location.reload();
+          });
+      }
+    });
+
+    // ドラッグ中の要素の後に配置する要素を取得
+    function getDragAfterElement(container, y) {
+      const draggableElements = [
+        ...container.querySelectorAll(".todo-item:not(.dragging)"),
+      ];
+
+      return draggableElements.reduce(
+        (closest, child) => {
+          const box = child.getBoundingClientRect();
+          const offset = y - box.top - box.height / 2;
+
+          if (offset < 0 && offset > closest.offset) {
+            return { offset: offset, element: child };
+          } else {
+            return closest;
+          }
+        },
+        { offset: Number.NEGATIVE_INFINITY }
+      ).element;
+    }
+
+    // ドラッグ中のクラスを追加/削除
+    todoList.addEventListener("drag", function (e) {
+      if (e.target.classList.contains("todo-item")) {
+        e.target.classList.add("dragging");
+      }
+    });
+
+    todoList.addEventListener("dragend", function (e) {
+      if (e.target.classList.contains("todo-item")) {
+        e.target.classList.remove("dragging");
+      }
+    });
+  });
+</script>
+{% endblock %}
