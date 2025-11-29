@@ -74,6 +74,7 @@
             class="btn btn-delete btn-sm"
             name="delete"
             value="{{ todo.id }}"
+            style="min-width: auto"
           >
             削除
           </button>
@@ -155,8 +156,10 @@
 
     let draggedElement = null;
     let isDragging = false;
+    let touchStartY = 0;
+    let touchCurrentY = 0;
 
-    // ドラッグ開始
+    // ドラッグ開始（マウス）
     todoList.addEventListener("dragstart", function (e) {
       // ボタンやフォームをクリックした場合はドラッグを無効化
       if (
@@ -177,6 +180,123 @@
       }
     });
 
+    // タッチ開始（モバイル対応）
+    todoList.addEventListener(
+      "touchstart",
+      function (e) {
+        // ボタンやフォームをタッチした場合はドラッグを無効化
+        if (
+          e.target.closest(".simple-todo-actions") ||
+          e.target.closest(".btn") ||
+          e.target.closest("form")
+        ) {
+          return;
+        }
+
+        const item = e.target.closest(".simple-todo-item");
+        if (item) {
+          draggedElement = item;
+          touchStartY = e.touches[0].clientY;
+          touchCurrentY = touchStartY;
+          item.style.opacity = "0.5";
+          item.style.transition = "none";
+        }
+      },
+      { passive: true }
+    );
+
+    // タッチ移動（モバイル対応）
+    todoList.addEventListener(
+      "touchmove",
+      function (e) {
+        if (!draggedElement) return;
+
+        e.preventDefault();
+        touchCurrentY = e.touches[0].clientY;
+        const deltaY = touchCurrentY - touchStartY;
+
+        // ドラッグ中の要素を視覚的に移動
+        draggedElement.style.transform = `translateY(${deltaY}px)`;
+
+        // 他の要素との位置関係を更新
+        const afterElement = getDragAfterElement(todoList, touchCurrentY);
+        const allItems = todoList.querySelectorAll(".simple-todo-item");
+        allItems.forEach((item) => {
+          if (item !== draggedElement) {
+            item.classList.remove("drag-over");
+          }
+        });
+
+        // DOMの順序を実際に変更
+        if (afterElement && afterElement !== draggedElement) {
+          afterElement.classList.add("drag-over");
+          if (afterElement.nextSibling === draggedElement) {
+            // 既に正しい位置にある場合は何もしない
+          } else {
+            todoList.insertBefore(draggedElement, afterElement);
+          }
+        } else if (
+          afterElement === null &&
+          draggedElement !== todoList.lastElementChild
+        ) {
+          // 最後に移動
+          todoList.appendChild(draggedElement);
+        }
+      },
+      { passive: false }
+    );
+
+    // タッチ終了（モバイル対応）
+    todoList.addEventListener(
+      "touchend",
+      function (e) {
+        if (!draggedElement) return;
+
+        const item = draggedElement;
+        item.style.opacity = "1";
+        item.style.transform = "";
+        item.style.transition = "";
+
+        // 順序を更新
+        const todos = Array.from(todoList.children);
+        const orders = todos.map((item, index) => ({
+          id: item.getAttribute("data-todo-id"),
+          order: index + 1,
+        }));
+
+        // サーバーに順序を送信
+        fetch("/update-order", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ orders: orders }),
+        })
+          .then((response) => response.json())
+          .then((data) => {
+            if (data.success) {
+              console.log("順序を更新しました");
+            } else {
+              console.error("順序の更新に失敗:", data.error);
+              location.reload();
+            }
+          })
+          .catch((error) => {
+            console.error("エラー:", error);
+            location.reload();
+          });
+
+        // すべての要素からdrag-overクラスを削除
+        const allItems = todoList.querySelectorAll(".simple-todo-item");
+        allItems.forEach((item) => item.classList.remove("drag-over"));
+
+        draggedElement = null;
+        touchStartY = 0;
+        touchCurrentY = 0;
+      },
+      { passive: true }
+    );
+
     // ドラッグ中
     todoList.addEventListener("dragover", function (e) {
       e.preventDefault();
@@ -194,7 +314,9 @@
         todoList.appendChild(draggedElement);
       } else {
         todoList.insertBefore(draggedElement, afterElement);
-        afterElement.classList.add("drag-over");
+        if (afterElement !== draggedElement) {
+          afterElement.classList.add("drag-over");
+        }
       }
     });
 
@@ -250,7 +372,7 @@
       }
     });
 
-    // ドラッグ中の要素の後に配置する要素を取得
+    // ドラッグ中の要素の後に配置する要素を取得（マウス・タッチ両対応）
     function getDragAfterElement(container, y) {
       const draggableElements = [
         ...container.querySelectorAll(".simple-todo-item:not(.dragging)"),
@@ -258,6 +380,7 @@
 
       return draggableElements.reduce(
         (closest, child) => {
+          if (child === draggedElement) return closest;
           const box = child.getBoundingClientRect();
           const offset = y - box.top - box.height / 2;
 

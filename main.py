@@ -446,9 +446,9 @@ def toggle_completion(todo_id):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
-@app.route('/send-line-notifications', methods=['POST'])
+@app.route('/send-line-notifications', methods=['GET', 'POST'])
 def send_line_notifications():
-    """LINE通知を送信（手動実行用）"""
+    """LINE通知を送信（手動実行用・外部スケジューラー用）"""
     try:
         from core.line_notifier import LineNotifier
         
