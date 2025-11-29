@@ -158,6 +158,8 @@
     let isDragging = false;
     let touchStartY = 0;
     let touchCurrentY = 0;
+    let touchStartX = 0;
+    const DRAG_THRESHOLD = 15; // ドラッグ開始の閾値（px）
 
     // ドラッグ開始（マウス）
     todoList.addEventListener("dragstart", function (e) {
@@ -195,11 +197,11 @@
 
         const item = e.target.closest(".simple-todo-item");
         if (item) {
-          draggedElement = item;
           touchStartY = e.touches[0].clientY;
+          touchStartX = e.touches[0].clientX;
           touchCurrentY = touchStartY;
-          item.style.opacity = "0.5";
-          item.style.transition = "none";
+          isDragging = false;
+          // まだドラッグを開始しない（移動距離で判定）
         }
       },
       { passive: true }
@@ -209,38 +211,52 @@
     todoList.addEventListener(
       "touchmove",
       function (e) {
-        if (!draggedElement) return;
+        const item = e.target.closest(".simple-todo-item");
+        if (!item) return;
 
-        e.preventDefault();
         touchCurrentY = e.touches[0].clientY;
-        const deltaY = touchCurrentY - touchStartY;
+        const touchCurrentX = e.touches[0].clientX;
+        const deltaY = Math.abs(touchCurrentY - touchStartY);
+        const deltaX = Math.abs(touchCurrentX - touchStartX);
 
-        // ドラッグ中の要素を視覚的に移動
-        draggedElement.style.transform = `translateY(${deltaY}px)`;
+        // 縦方向の移動が横方向より大きく、閾値を超えた場合のみドラッグ開始
+        if (!isDragging && deltaY > DRAG_THRESHOLD && deltaY > deltaX) {
+          draggedElement = item;
+          isDragging = true;
+          item.style.opacity = "0.5";
+          item.style.transition = "none";
+          e.preventDefault(); // ドラッグ開始時のみpreventDefault
+        }
 
-        // 他の要素との位置関係を更新
-        const afterElement = getDragAfterElement(todoList, touchCurrentY);
-        const allItems = todoList.querySelectorAll(".simple-todo-item");
-        allItems.forEach((item) => {
-          if (item !== draggedElement) {
-            item.classList.remove("drag-over");
+        if (isDragging && draggedElement) {
+          e.preventDefault();
+          const currentDeltaY = touchCurrentY - touchStartY;
+
+          // ドラッグ中の要素を視覚的に移動
+          draggedElement.style.transform = `translateY(${currentDeltaY}px)`;
+
+          // 他の要素との位置関係を更新
+          const afterElement = getDragAfterElement(todoList, touchCurrentY);
+          const allItems = todoList.querySelectorAll(".simple-todo-item");
+          allItems.forEach((item) => {
+            if (item !== draggedElement) {
+              item.classList.remove("drag-over");
+            }
+          });
+
+          // DOMの順序を実際に変更
+          if (afterElement && afterElement !== draggedElement) {
+            afterElement.classList.add("drag-over");
+            if (afterElement.nextSibling !== draggedElement) {
+              todoList.insertBefore(draggedElement, afterElement);
+            }
+          } else if (
+            afterElement === null &&
+            draggedElement !== todoList.lastElementChild
+          ) {
+            // 最後に移動
+            todoList.appendChild(draggedElement);
           }
-        });
-
-        // DOMの順序を実際に変更
-        if (afterElement && afterElement !== draggedElement) {
-          afterElement.classList.add("drag-over");
-          if (afterElement.nextSibling === draggedElement) {
-            // 既に正しい位置にある場合は何もしない
-          } else {
-            todoList.insertBefore(draggedElement, afterElement);
-          }
-        } else if (
-          afterElement === null &&
-          draggedElement !== todoList.lastElementChild
-        ) {
-          // 最後に移動
-          todoList.appendChild(draggedElement);
         }
       },
       { passive: false }
@@ -250,49 +266,51 @@
     todoList.addEventListener(
       "touchend",
       function (e) {
-        if (!draggedElement) return;
+        if (isDragging && draggedElement) {
+          const item = draggedElement;
+          item.style.opacity = "1";
+          item.style.transform = "";
+          item.style.transition = "";
 
-        const item = draggedElement;
-        item.style.opacity = "1";
-        item.style.transform = "";
-        item.style.transition = "";
+          // 順序を更新
+          const todos = Array.from(todoList.children);
+          const orders = todos.map((item, index) => ({
+            id: item.getAttribute("data-todo-id"),
+            order: index + 1,
+          }));
 
-        // 順序を更新
-        const todos = Array.from(todoList.children);
-        const orders = todos.map((item, index) => ({
-          id: item.getAttribute("data-todo-id"),
-          order: index + 1,
-        }));
-
-        // サーバーに順序を送信
-        fetch("/update-order", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ orders: orders }),
-        })
-          .then((response) => response.json())
-          .then((data) => {
-            if (data.success) {
-              console.log("順序を更新しました");
-            } else {
-              console.error("順序の更新に失敗:", data.error);
-              location.reload();
-            }
+          // サーバーに順序を送信
+          fetch("/update-order", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ orders: orders }),
           })
-          .catch((error) => {
-            console.error("エラー:", error);
-            location.reload();
-          });
+            .then((response) => response.json())
+            .then((data) => {
+              if (data.success) {
+                console.log("順序を更新しました");
+              } else {
+                console.error("順序の更新に失敗:", data.error);
+                location.reload();
+              }
+            })
+            .catch((error) => {
+              console.error("エラー:", error);
+              location.reload();
+            });
 
-        // すべての要素からdrag-overクラスを削除
-        const allItems = todoList.querySelectorAll(".simple-todo-item");
-        allItems.forEach((item) => item.classList.remove("drag-over"));
+          // すべての要素からdrag-overクラスを削除
+          const allItems = todoList.querySelectorAll(".simple-todo-item");
+          allItems.forEach((item) => item.classList.remove("drag-over"));
+        }
 
         draggedElement = null;
+        isDragging = false;
         touchStartY = 0;
         touchCurrentY = 0;
+        touchStartX = 0;
       },
       { passive: true }
     );

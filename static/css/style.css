@@ -1121,7 +1121,27 @@ header nav {
     }
     
     main {
-        padding: 20px;
+        padding: 15px 10px;
+    }
+    
+    .todo-list-container {
+        padding: 10px 5px;
+    }
+    
+    .simple-list-container {
+        padding: 10px 5px;
+    }
+    
+    .todo-list {
+        max-width: 100%;
+        margin: 0 auto;
+    }
+    
+    .simple-todo-list {
+        max-width: 100%;
+        margin: 0 auto;
+        grid-template-columns: 1fr;
+        gap: 10px;
     }
     
     .todo-header {
@@ -1141,6 +1161,26 @@ header nav {
     
     .todo-item {
         flex-direction: column;
+        padding: 12px 15px;
+        margin-bottom: 10px;
+        max-width: 100%;
+        margin-left: auto;
+        margin-right: auto;
+    }
+    
+    .todo-item .todo-title {
+        font-size: 1rem;
+        margin-bottom: 8px;
+    }
+    
+    .todo-item .todo-description {
+        font-size: 0.85rem;
+        margin-bottom: 8px;
+    }
+    
+    .todo-item .todo-meta {
+        font-size: 0.8rem;
+        margin-bottom: 8px;
     }
     
     .todo-actions {
@@ -1182,6 +1222,21 @@ header nav {
     
     .simple-todo-item {
         flex-direction: column;
+        padding: 12px 15px;
+        margin-bottom: 10px;
+        max-width: 100%;
+        margin-left: auto;
+        margin-right: auto;
+    }
+    
+    .simple-todo-item .simple-todo-title {
+        font-size: 1rem;
+        margin-bottom: 6px;
+    }
+    
+    .simple-todo-item .simple-todo-date {
+        font-size: 0.85rem;
+        margin-bottom: 8px;
     }
     
     .simple-todo-actions {
@@ -1198,6 +1253,23 @@ header nav {
         font-size: 0.9rem;
         min-width: 60px;
         width: auto;
+    }
+    
+    /* バッジのサイズを小さく */
+    .badge {
+        padding: 3px 8px;
+        font-size: 0.7rem;
+        border-radius: 10px;
+    }
+    
+    .badge strong {
+        font-size: 0.7rem;
+    }
+    
+    .category-badge {
+        padding: 3px 8px;
+        font-size: 0.65rem;
+        border-radius: 10px;
     }
 }
 
